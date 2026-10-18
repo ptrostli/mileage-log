@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mileage Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
 <style>
   /* One narrow column: office line, add-a-trip form, then the trip log. */
   :root {
@@ -18,6 +21,8 @@
     --soft: #e5efe9;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --display: "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --highlight: #f2b33d;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -31,6 +36,7 @@
       --accent-ink: #0d1a13;
       --danger: #ef8a7e;
       --soft: #22322a;
+      --highlight: #f5c260;
       color-scheme: dark;
     }
   }
@@ -51,7 +57,56 @@
     display: grid;
     gap: 20px;
   }
-  h1 { font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1.1; margin: 0; letter-spacing: -0.02em; }
+  .tagline { margin: 4px 0 0; font-size: 17px; color: var(--muted); }
+  .welcome {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px;
+    display: grid;
+    gap: 20px;
+  }
+  .welcome h2 { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.15; margin: 0; text-wrap: balance; }
+  .welcome h2 em { font-style: normal; color: var(--accent); }
+  .welcome .lede { margin: 0; font-size: 17px; max-width: 34em; color: var(--muted); }
+  .route-art { width: 100%; max-width: 100%; height: auto; display: block; }
+  .route-art .out { stroke: var(--accent); }
+  .route-art .back { stroke: var(--highlight); }
+  .route-art .ground { fill: var(--soft); }
+  .route-art .building { fill: var(--ink); }
+  .route-art .window { fill: var(--surface); }
+  .route-art .pin { fill: var(--accent); }
+  .route-art .pin-dot { fill: var(--surface); }
+  .route-art .tag { fill: var(--surface); stroke: var(--line); }
+  .route-art text { fill: var(--ink); font: 700 14px var(--font); font-variant-numeric: tabular-nums; }
+  .route-art .caption { fill: var(--muted); font: 600 12px var(--font); }
+  @media (prefers-reduced-motion: no-preference) {
+    .route-art .out, .route-art .back { stroke-dasharray: 6 8; animation: drive 1.6s linear infinite; }
+    .route-art .back { animation-direction: reverse; }
+    @keyframes drive { to { stroke-dashoffset: -28; } }
+  }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; counter-reset: step; }
+  .steps li { counter-increment: step; background: var(--soft); border-radius: 12px; padding: 14px; display: grid; gap: 2px; align-content: start; }
+  .steps li::before {
+    content: counter(step);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--accent); color: var(--accent-ink);
+    font: 800 14px var(--display); margin-bottom: 6px;
+  }
+  .steps strong { font-size: 15px; }
+  .steps span { font-size: 14px; color: var(--muted); }
+  @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } .welcome { padding: 20px; } .welcome h2 { font-size: 26px; } }
+  button.big { font-size: 18px; padding: 14px 28px; border-radius: 12px; justify-self: start; }
+  .setup {
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 0 6px var(--soft);
+  }
+  .setup .step-label { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+  .setup h2 { font-family: var(--display); font-weight: 800; font-size: 26px; margin: 0 0 4px; }
+  .setup .lede { margin: 0 0 16px; color: var(--muted); }
+  .setup input[type="text"] { font-size: 18px; padding: 14px 16px; }
   h2 { font-size: 18px; margin: 0 0 12px; }
   .office-line { color: var(--muted); margin: 4px 0 0; }
   .office-line strong { color: var(--ink); font-weight: 600; }
@@ -179,18 +234,51 @@
 <main class="wrap">
   <header>
     <h1>Mileage Log</h1>
+    <p class="tagline">Time to log those miles 🚗</p>
     <p class="office-line" id="office-line" hidden>Trips start and end at <strong id="office-name"></strong> · <button class="link" id="change-office" type="button">Change</button></p>
   </header>
 
-  <section class="card" id="setup-card" hidden>
-    <h2>First, where is your office?</h2>
+  <section class="welcome" id="welcome-card" hidden>
+    <svg class="route-art" viewBox="0 0 640 170" role="img" aria-label="A drive from the office to a destination and back">
+      <rect class="ground" x="0" y="140" width="640" height="30" rx="8"></rect>
+      <path class="out" d="M96 128 C 220 20, 420 20, 540 108" fill="none" stroke-width="5" stroke-linecap="round"></path>
+      <path class="back" d="M540 124 C 420 70, 220 70, 96 140" fill="none" stroke-width="5" stroke-linecap="round"></path>
+      <rect class="building" x="40" y="66" width="56" height="78" rx="4"></rect>
+      <rect class="window" x="50" y="78" width="12" height="12" rx="2"></rect>
+      <rect class="window" x="74" y="78" width="12" height="12" rx="2"></rect>
+      <rect class="window" x="50" y="100" width="12" height="12" rx="2"></rect>
+      <rect class="window" x="74" y="100" width="12" height="12" rx="2"></rect>
+      <rect class="window" x="61" y="122" width="14" height="22" rx="2"></rect>
+      <text class="caption" x="68" y="160" text-anchor="middle">Office</text>
+      <path class="pin" d="M560 72 c-16 0 -28 12 -28 27 c0 20 28 45 28 45 s28 -25 28 -45 c0 -15 -12 -27 -28 -27z"></path>
+      <circle class="pin-dot" cx="560" cy="99" r="9"></circle>
+      <text class="caption" x="560" y="160" text-anchor="middle">Client</text>
+      <rect class="tag" x="244" y="30" width="152" height="34" rx="17"></rect>
+      <text x="320" y="52" text-anchor="middle">12.4 mi there &amp; back</text>
+    </svg>
+    <h2>Your work drives, <em>added up for you.</em></h2>
+    <p class="lede">Tell Mileage Log where you went. It works out the real driving distance from your office and back, and hands you a spreadsheet ready for your reimbursement form.</p>
+    <ol class="steps">
+      <li><strong>Set your office</strong><span>Once, and you're done.</span></li>
+      <li><strong>Paste your week</strong><span>All the addresses at once, or one at a time.</span></li>
+      <li><strong>Download the sheet</strong><span>Every trip with its miles, totaled.</span></li>
+    </ol>
+    <button class="primary big" type="button" id="get-started">Get started</button>
+  </section>
+
+  <section class="card setup" id="setup-card" hidden>
+    <p class="step-label">Step 1 · Set your office</p>
+    <h2>Where's your office?</h2>
+    <p class="lede">Every trip starts and ends here. Type the address and pick it from the list.</p>
     <form id="office-form" class="fields" autocomplete="off">
       <div class="search">
         <label for="office-input">Office address</label>
-        <input type="text" id="office-input" placeholder="Start typing the street address…">
+        <input type="text" id="office-input" placeholder="e.g. 400 Broad St, Seattle">
         <ul class="suggestions" id="office-suggestions" role="listbox" hidden></ul>
       </div>
-      <p class="hint">Pick the right address from the list that appears. You only need to do this once.</p>
+      <div class="actions">
+        <button class="link" type="button" id="setup-back">Back</button>
+      </div>
     </form>
     <p class="status" id="office-status"></p>
   </section>
@@ -326,6 +414,7 @@ const METERS_PER_MILE = 1609.344;
 
 let state = loadState();
 let selectedDestination = null;
+let isSettingUp = false;
 
 function loadState() {
   const empty = { office: null, rate: null, trips: [] };
@@ -756,7 +845,8 @@ function renderRecentPlaces() {
 
 function renderAll() {
   const hasOffice = Boolean(state.office);
-  document.getElementById("setup-card").hidden = hasOffice;
+  document.getElementById("welcome-card").hidden = hasOffice || isSettingUp;
+  document.getElementById("setup-card").hidden = hasOffice || !isSettingUp;
   document.getElementById("office-line").hidden = !hasOffice;
   for (const id of ["trip-card", "log-card", "settings-card"]) document.getElementById(id).hidden = !hasOffice;
   if (!hasOffice) return;
@@ -1055,6 +1145,22 @@ document.getElementById("change-office").addEventListener("click", () => {
 });
 
 document.getElementById("office-form").addEventListener("submit", (event) => event.preventDefault());
+
+document.getElementById("get-started").addEventListener("click", () => {
+  isSettingUp = true;
+  renderAll();
+  document.getElementById("office-input").focus();
+});
+
+document.getElementById("setup-back").addEventListener("click", () => {
+  setStatus("office-status", "");
+  if (state.office) {
+    document.getElementById("setup-card").hidden = true;
+    return;
+  }
+  isSettingUp = false;
+  renderAll();
+});
 
 document.getElementById("trip-form").addEventListener("submit", async (event) => {
   event.preventDefault();
