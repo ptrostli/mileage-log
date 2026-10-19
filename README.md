@@ -9,7 +9,7 @@ A small web app for logging work drives. Enter where you went, and it works out 
 1. **Set your office.** You only do this once. Every trip starts and ends there.
 2. **Add your trips.** Paste the week's addresses, one per line, or add them one at a time. A line can start with its date (`10/14`, `Oct 14`, or `Tuesday`).
 3. **Check and save.** Make sure each place is the right one. If it isn't, pick another match or retype it.
-4. **Download the spreadsheet.** Pick a month and click **Download spreadsheet (CSV)**. It opens in Excel, Numbers, or Google Sheets.
+4. **Download the spreadsheet.** Pick a month and click **Download for Excel**. You get a formatted .xlsx file with totals that opens in Excel, Numbers, or Google Sheets. **CSV** next to it gives a plain version.
 
 Under **Settings and backup** you can:
 - set a per-mile rate to get dollar amounts

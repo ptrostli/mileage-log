@@ -416,7 +416,8 @@
       <h2 style="margin:0">Your trips</h2>
       <div class="actions">
         <select id="month-filter" aria-label="Show trips from"></select>
-        <button class="primary" type="button" id="download-csv">Download spreadsheet (CSV)</button>
+        <button class="primary" type="button" id="download-xlsx">Download for Excel</button>
+        <button type="button" id="download-csv">CSV</button>
       </div>
     </div>
     <dl class="totals">
@@ -991,28 +992,214 @@ function csvField(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-function buildCsv(trips) {
-  const header = ["Destination", "Destination address", "Reason", "From (office)", "Miles to destination", "Miles back to office", "Round trip miles"];
-  if (state.askForDates) header.unshift("Date");
-  if (state.rate) header.push("Amount");
-  const rows = trips.map((trip) => {
-    const row = [trip.destination.title, trip.destination.detail, trip.purpose, trip.officeLabel ?? state.office.label, formatMiles(trip.milesOut), formatMiles(trip.milesBack), formatMiles(roundTripMiles(trip))];
-    if (state.askForDates) row.unshift(trip.date);
-    if (state.rate) row.push(tripAmount(trip).toFixed(2));
-    return row;
-  });
-  const totalMiles = trips.reduce((sum, trip) => sum + roundTripMiles(trip), 0);
-  const totalRow = header.map(() => "");
-  totalRow[0] = "Total";
-  totalRow[header.indexOf("Round trip miles")] = formatMiles(totalMiles);
-  if (state.rate) totalRow[header.indexOf("Amount")] = totalAmount(trips).toFixed(2);
-  rows.push(totalRow);
-  return [header, ...rows].map((row) => row.map(csvField).join(",")).join("\r\n");
+function spreadsheetColumns() {
+  const columns = [
+    { header: "Destination", kind: "text", width: 28, value: (trip) => trip.destination.title },
+    { header: "Destination address", kind: "text", width: 42, value: (trip) => trip.destination.detail },
+    { header: "Reason", kind: "text", width: 24, value: (trip) => trip.purpose },
+    { header: "From (office)", kind: "text", width: 40, value: (trip) => trip.officeLabel ?? state.office.label },
+    { header: "Miles to destination", kind: "miles", width: 20, value: (trip) => trip.milesOut, totaled: true },
+    { header: "Miles back to office", kind: "miles", width: 20, value: (trip) => trip.milesBack, totaled: true },
+    { header: "Round trip miles", kind: "miles", width: 17, value: roundTripMiles, totaled: true },
+  ];
+  if (state.askForDates) columns.unshift({ header: "Date", kind: "date", width: 14, value: (trip) => trip.date });
+  if (state.rate) columns.push({ header: "Amount", kind: "money", width: 12, value: tripAmount, totaled: true });
+  return columns;
 }
 
-function downloadFile(filename, contents, mimeType) {
-  // The BOM makes Excel read accented characters in addresses correctly.
-  const blob = new Blob(["﻿" + contents], { type: mimeType });
+function formatCsvCell(kind, value) {
+  if (kind === "miles") return formatMiles(value);
+  if (kind === "money") return value.toFixed(2);
+  return value;
+}
+
+function buildCsv(trips) {
+  const columns = spreadsheetColumns();
+  const rows = trips.map((trip) => columns.map((column) => formatCsvCell(column.kind, column.value(trip))));
+  const totalRow = columns.map((column, index) => {
+    if (index === 0) return "Total";
+    if (!column.totaled) return "";
+    return formatCsvCell(column.kind, trips.reduce((sum, trip) => sum + column.value(trip), 0));
+  });
+  return [columns.map((column) => column.header), ...rows, totalRow].map((row) => row.map(csvField).join(",")).join("\r\n");
+}
+
+const XLSX_STYLE = { header: 1, date: 2, miles: 3, money: 4, totalLabel: 5, totalMiles: 6, totalMoney: 7, totalBlank: 8 };
+
+const XLSX_STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="3"><numFmt numFmtId="164" formatCode="0.0"/><numFmt numFmtId="165" formatCode="mmm d, yyyy"/><numFmt numFmtId="166" formatCode="&quot;$&quot;#,##0.00"/></numFmts>
+<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE5EFE9"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top style="thin"><color auto="1"/></top><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="9">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="166" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+function escapeXml(text) {
+  return String(text)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function columnLetter(index) {
+  let letters = "";
+  for (let number = index + 1; number > 0; number = Math.floor((number - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((number - 1) % 26)) + letters;
+  }
+  return letters;
+}
+
+function excelSerialDate(isoDate) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return (Date.UTC(year, month - 1, day) - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+function xlsxTextCell(reference, text, style = 0) {
+  const styleAttribute = style ? ` s="${style}"` : "";
+  return `<c r="${reference}" t="inlineStr"${styleAttribute}><is><t xml:space="preserve">${escapeXml(text)}</t></is></c>`;
+}
+
+function xlsxNumberCell(reference, number, style) {
+  return `<c r="${reference}" s="${style}"><v>${number}</v></c>`;
+}
+
+function xlsxDataCell(reference, kind, value) {
+  if (kind === "date") return xlsxNumberCell(reference, excelSerialDate(value), XLSX_STYLE.date);
+  if (kind === "miles") return xlsxNumberCell(reference, Math.round(value * 10) / 10, XLSX_STYLE.miles);
+  if (kind === "money") return xlsxNumberCell(reference, value, XLSX_STYLE.money);
+  return xlsxTextCell(reference, value);
+}
+
+function buildWorksheetXml(trips) {
+  const columns = spreadsheetColumns();
+  const lastDataRow = trips.length + 1;
+  const totalRowNumber = lastDataRow + 1;
+  const headerRow = `<row r="1">${columns.map((column, index) => xlsxTextCell(`${columnLetter(index)}1`, column.header, XLSX_STYLE.header)).join("")}</row>`;
+  const dataRows = trips.map((trip, tripIndex) => {
+    const rowNumber = tripIndex + 2;
+    const cells = columns.map((column, index) => xlsxDataCell(`${columnLetter(index)}${rowNumber}`, column.kind, column.value(trip)));
+    return `<row r="${rowNumber}">${cells.join("")}</row>`;
+  });
+  const totalCells = columns.map((column, index) => {
+    const reference = `${columnLetter(index)}${totalRowNumber}`;
+    if (index === 0) return xlsxTextCell(reference, "Total", XLSX_STYLE.totalLabel);
+    if (!column.totaled) return `<c r="${reference}" s="${XLSX_STYLE.totalBlank}"/>`;
+    const letter = columnLetter(index);
+    const sum = Math.round(trips.reduce((total, trip) => total + column.value(trip), 0) * 100) / 100;
+    const style = column.kind === "money" ? XLSX_STYLE.totalMoney : XLSX_STYLE.totalMiles;
+    const formula = trips.length ? `SUM(${letter}2:${letter}${lastDataRow})` : "0";
+    return `<c r="${reference}" s="${style}"><f>${formula}</f><v>${sum}</v></c>`;
+  });
+  const widths = columns.map((column, index) => `<col min="${index + 1}" max="${index + 1}" width="${column.width}" customWidth="1"/>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${widths}</cols>
+<sheetData>${headerRow}${dataRows.join("")}<row r="${totalRowNumber}">${totalCells.join("")}</row></sheetData>
+</worksheet>`;
+}
+
+function buildXlsx(trips) {
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Mileage" sheetId="1" r:id="rId1"/></sheets><calcPr fullCalcOnLoad="1"/></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": XLSX_STYLES_XML,
+    "xl/worksheets/sheet1.xml": buildWorksheetXml(trips),
+  };
+  return new Blob([zipStored(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+const CRC32_TABLE = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  return value >>> 0;
+});
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+// An uncompressed ("stored") zip is valid for .xlsx and avoids pulling in a compression library.
+function zipStored(files) {
+  const encoder = new TextEncoder();
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const [name, text] of Object.entries(files)) {
+    const nameBytes = encoder.encode(name);
+    const data = encoder.encode(text);
+    const checksum = crc32(data);
+
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);
+    local.setUint16(4, 20, true);
+    local.setUint16(6, 0x0800, true);
+    local.setUint16(8, 0, true);
+    local.setUint16(10, dosTime, true);
+    local.setUint16(12, dosDate, true);
+    local.setUint32(14, checksum, true);
+    local.setUint32(18, data.length, true);
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, nameBytes.length, true);
+    local.setUint16(28, 0, true);
+    localParts.push(new Uint8Array(local.buffer), nameBytes, data);
+
+    const central = new DataView(new ArrayBuffer(46));
+    central.setUint32(0, 0x02014b50, true);
+    central.setUint16(4, 20, true);
+    central.setUint16(6, 20, true);
+    central.setUint16(8, 0x0800, true);
+    central.setUint16(10, 0, true);
+    central.setUint16(12, dosTime, true);
+    central.setUint16(14, dosDate, true);
+    central.setUint32(16, checksum, true);
+    central.setUint32(20, data.length, true);
+    central.setUint32(24, data.length, true);
+    central.setUint16(28, nameBytes.length, true);
+    central.setUint32(42, offset, true);
+    centralParts.push(new Uint8Array(central.buffer), nameBytes);
+
+    offset += 30 + nameBytes.length + data.length;
+  }
+
+  const centralSize = centralParts.reduce((size, part) => size + part.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, Object.keys(files).length, true);
+  end.setUint16(10, Object.keys(files).length, true);
+  end.setUint32(12, centralSize, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...localParts, ...centralParts, new Uint8Array(end.buffer)]);
+}
+
+function downloadBlob(filename, blob) {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = filename;
@@ -1020,6 +1207,11 @@ function downloadFile(filename, contents, mimeType) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function downloadText(filename, contents, mimeType) {
+  // The BOM makes Excel read accented characters in addresses correctly.
+  downloadBlob(filename, new Blob(["﻿" + contents], { type: mimeType }));
 }
 
 function createTrip({ date, destination, purpose, milesOut, milesBack }) {
@@ -1370,7 +1562,13 @@ document.getElementById("download-csv").addEventListener("click", () => {
   const month = selectedMonth();
   const trips = tripsInView();
   const filename = month === "all" ? "mileage-all-trips.csv" : `mileage-${month}.csv`;
-  downloadFile(filename, buildCsv(trips), "text/csv;charset=utf-8");
+  downloadText(filename, buildCsv(trips), "text/csv;charset=utf-8");
+});
+
+document.getElementById("download-xlsx").addEventListener("click", () => {
+  const month = selectedMonth();
+  const filename = month === "all" ? "mileage-all-trips.xlsx" : `mileage-${month}.xlsx`;
+  downloadBlob(filename, buildXlsx(tripsInView()));
 });
 
 function applyDatesSetting() {
@@ -1394,7 +1592,7 @@ document.getElementById("rate-input").addEventListener("change", (event) => {
 });
 
 document.getElementById("download-backup").addEventListener("click", () => {
-  downloadFile(`mileage-backup-${todayIso()}.json`, JSON.stringify(state, null, 2), "application/json");
+  downloadText(`mileage-backup-${todayIso()}.json`, JSON.stringify(state, null, 2), "application/json");
 });
 
 document.getElementById("restore-backup").addEventListener("click", () => document.getElementById("restore-file").click());
