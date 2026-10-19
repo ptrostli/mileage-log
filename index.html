@@ -122,6 +122,14 @@
     font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
     padding: 3px 8px; border-radius: 999px; transform: rotate(8deg);
   }
+  .dev-reset {
+    position: fixed; z-index: 40;
+    right: max(16px, env(safe-area-inset-right, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    background: var(--danger); color: var(--surface); border-color: var(--danger);
+    font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  }
   button.flair.revealed { transform: none; box-shadow: 2px 2px 0 var(--flair-shadow); cursor: default; }
   @media (prefers-reduced-motion: no-preference) {
     button.flair:not(.revealed) { animation: nudge 4s ease-in-out infinite; }
@@ -299,7 +307,7 @@
 
   <section class="card setup" id="setup-card" hidden>
     <p class="step-label">Step 1 · Set your office</p>
-    <h2>Where's your office?</h2>
+    <h2 id="setup-title">Where's your office?</h2>
     <p class="lede">Every trip starts and ends here. Type the address and pick it from the list.</p>
     <form id="office-form" class="fields" autocomplete="off">
       <div class="search">
@@ -435,6 +443,8 @@
       </div>
     </details>
   </section>
+
+  <button type="button" class="dev-reset" id="dev-reset" hidden>Reset app (testing)</button>
 
   <p class="credit">Distances are driving routes from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> data (OSRM routing, Photon search).</p>
 </main>
@@ -875,6 +885,7 @@ function renderRecentPlaces() {
 }
 
 function renderGreeting() {
+  document.getElementById("setup-title").textContent = state.name && !state.office ? `Great, ${state.name}! Now, where's your office?` : "Where's your office?";
   document.getElementById("tagline").textContent = state.name ? `Time to log those miles, ${state.name} 🚗` : "Time to log those miles 🚗";
   const guess = document.getElementById("name-guess");
   if (!state.name) return;
@@ -1227,6 +1238,7 @@ attachPlaceSearch(document.getElementById("dest-input"), document.getElementById
 
 document.getElementById("change-office").addEventListener("click", () => {
   document.getElementById("setup-card").hidden = false;
+  document.getElementById("setup-title").textContent = "Where's your new office?";
   document.getElementById("office-input").value = "";
   setStatus("office-status", "Pick your new office address. Trips you already logged keep their miles.");
   document.getElementById("office-input").focus();
@@ -1234,21 +1246,47 @@ document.getElementById("change-office").addEventListener("click", () => {
 
 document.getElementById("office-form").addEventListener("submit", (event) => event.preventDefault());
 
-document.getElementById("name-guess").addEventListener("click", (event) => {
-  if (state.name) return;
-  state.name = "Amanda";
-  saveState();
-  celebrate(event.currentTarget);
-  renderGreeting();
-});
-
-document.getElementById("get-started").addEventListener("click", () => {
+function startSetup() {
   isSettingUp = true;
   state.hasSeenWelcome = true;
   saveState();
   renderAll();
   document.getElementById("office-input").focus();
+}
+
+document.getElementById("name-guess").addEventListener("click", (event) => {
+  if (state.name) {
+    startSetup();
+    return;
+  }
+  state.name = "Amanda";
+  saveState();
+  celebrate(event.currentTarget);
+  renderGreeting();
+  setTimeout(startSetup, 1100);
 });
+
+function showDevReset() {
+  document.getElementById("dev-reset").hidden = location.hash !== "#test";
+}
+
+window.addEventListener("hashchange", showDevReset);
+
+document.getElementById("dev-reset").addEventListener("click", (event) => {
+  const button = event.currentTarget;
+  if (!button.dataset.armed) {
+    button.dataset.armed = "yes";
+    button.textContent = "Tap again to wipe everything";
+    return;
+  }
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY + "-mode");
+  } catch {}
+  location.reload();
+});
+
+document.getElementById("get-started").addEventListener("click", startSetup);
 
 document.getElementById("setup-back").addEventListener("click", () => {
   setStatus("office-status", "");
@@ -1337,6 +1375,7 @@ document.getElementById("restore-file").addEventListener("change", async (event)
 document.getElementById("trip-date").value = todayIso();
 document.getElementById("list-default-date").value = todayIso();
 try { showAddMode(localStorage.getItem(STORAGE_KEY + "-mode") || "list"); } catch { showAddMode("list"); }
+showDevReset();
 renderAll();
 </script>
 </body>
