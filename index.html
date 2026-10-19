@@ -170,6 +170,12 @@
   .fields { display: grid; gap: 14px; }
   .row-2 { display: grid; grid-template-columns: 170px 1fr; gap: 14px; }
   @media (max-width: 520px) { .row-2 { grid-template-columns: 1fr; } }
+  .toggle { display: flex; gap: 10px; align-items: center; font-weight: 600; margin: 0; cursor: pointer; }
+  .toggle input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+  body.no-dates .date-field { display: none !important; }
+  body.no-dates .row-2 { grid-template-columns: 1fr; }
+  body.no-dates .review-main { grid-template-columns: minmax(0, 1fr) auto; }
+  body.no-dates .review-main > :nth-child(2) { grid-column: auto; grid-row: auto; }
   button {
     font: inherit;
     border-radius: 8px;
@@ -336,9 +342,9 @@
         <div>
           <label for="list-input">This week's trips, one per line</label>
           <textarea id="list-input" rows="7" placeholder="10/13 Pike Place Market, Seattle&#10;10/14 2401 Utah Ave S, Seattle, WA&#10;Thursday: 4000 E Madison St, Seattle"></textarea>
-          <p class="hint">Start a line with its date if you have it (10/14, Oct 14 or Tuesday). Each line counts as one trip from the office and back.</p>
+          <p class="hint"><span class="date-field">Start a line with its date if you have it (10/14, Oct 14 or Tuesday). </span>Each line counts as one trip from the office and back.</p>
         </div>
-        <div class="row-2">
+        <div class="row-2 date-field">
           <div>
             <label for="list-default-date">Date for lines without one</label>
             <input type="date" id="list-default-date">
@@ -363,7 +369,7 @@
     <div id="single-panel" hidden>
     <form id="trip-form" class="fields" autocomplete="off">
       <div class="row-2">
-        <div>
+        <div class="date-field">
           <label for="trip-date">Date</label>
           <input type="date" id="trip-date" required>
         </div>
@@ -406,7 +412,7 @@
       <table>
         <thead>
           <tr>
-            <th>Date</th>
+            <th class="date-field">Date</th>
             <th>Destination</th>
             <th class="num">There</th>
             <th class="num">Back</th>
@@ -428,6 +434,10 @@
           <label for="rate-input">Reimbursement rate per mile (optional)</label>
           <input type="number" id="rate-input" min="0" step="0.001" placeholder="e.g. 0.70">
           <p class="hint">If you fill this in, the spreadsheet also shows the dollar amount for each trip.</p>
+        </div>
+        <div>
+          <label class="toggle" for="dates-toggle"><input type="checkbox" id="dates-toggle"> Ask for trip dates</label>
+          <p class="hint">Most reimbursement forms want the date of each trip. If yours doesn't, turn this off: trips are filed under the day you add them, and the spreadsheet leaves out the date column.</p>
         </div>
         <hr class="divider">
         <div>
@@ -458,7 +468,7 @@ let isSettingUp = state.hasSeenWelcome;
 let selectedDestination = null;
 
 function loadState() {
-  const empty = { office: null, rate: null, trips: [], name: null, hasSeenWelcome: false };
+  const empty = { office: null, rate: null, trips: [], name: null, hasSeenWelcome: false, askForDates: true };
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     return saved ? { ...empty, ...saved } : empty;
@@ -782,6 +792,7 @@ function buildTripRow(trip) {
   const row = document.createElement("tr");
 
   const dateCell = document.createElement("td");
+  dateCell.className = "date-field";
   dateCell.textContent = formatDate(trip.date);
   dateCell.style.whiteSpace = "nowrap";
 
@@ -951,6 +962,7 @@ function renderAll() {
   if (!hasOffice) return;
   document.getElementById("office-name").textContent = state.office.label;
   document.getElementById("rate-input").value = state.rate ?? "";
+  document.getElementById("dates-toggle").checked = state.askForDates;
   renderRecentPlaces();
   renderMonthFilter();
   renderTrips();
@@ -961,16 +973,20 @@ function csvField(value) {
 }
 
 function buildCsv(trips) {
-  const header = ["Date", "Destination", "Destination address", "Reason", "From (office)", "Miles to destination", "Miles back to office", "Round trip miles"];
+  const header = ["Destination", "Destination address", "Reason", "From (office)", "Miles to destination", "Miles back to office", "Round trip miles"];
+  if (state.askForDates) header.unshift("Date");
   if (state.rate) header.push("Amount");
   const rows = trips.map((trip) => {
-    const row = [trip.date, trip.destination.title, trip.destination.detail, trip.purpose, trip.officeLabel ?? state.office.label, formatMiles(trip.milesOut), formatMiles(trip.milesBack), formatMiles(roundTripMiles(trip))];
+    const row = [trip.destination.title, trip.destination.detail, trip.purpose, trip.officeLabel ?? state.office.label, formatMiles(trip.milesOut), formatMiles(trip.milesBack), formatMiles(roundTripMiles(trip))];
+    if (state.askForDates) row.unshift(trip.date);
     if (state.rate) row.push(tripAmount(trip).toFixed(2));
     return row;
   });
   const totalMiles = trips.reduce((sum, trip) => sum + roundTripMiles(trip), 0);
-  const totalRow = ["Total", "", "", "", "", "", "", formatMiles(totalMiles)];
-  if (state.rate) totalRow.push(totalAmount(trips).toFixed(2));
+  const totalRow = header.map(() => "");
+  totalRow[0] = "Total";
+  totalRow[header.indexOf("Round trip miles")] = formatMiles(totalMiles);
+  if (state.rate) totalRow[header.indexOf("Amount")] = totalAmount(trips).toFixed(2);
   rows.push(totalRow);
   return [header, ...rows].map((row) => row.map(csvField).join(",")).join("\r\n");
 }
@@ -1087,6 +1103,7 @@ function buildReviewItem(item) {
 
   const dateInput = document.createElement("input");
   dateInput.type = "date";
+  dateInput.className = "date-field";
   dateInput.value = item.date;
   dateInput.setAttribute("aria-label", "Trip date");
   dateInput.addEventListener("change", () => { item.date = dateInput.value || item.date; });
@@ -1182,6 +1199,7 @@ document.getElementById("list-form").addEventListener("submit", async (event) =>
   const lines = document.getElementById("list-input").value.split(/\r?\n/).filter((line) => line.trim());
   const newItems = lines
     .map((line) => ({ raw: line.trim(), purpose: "", status: "searching", ...parseTripLine(line, defaultDate) }))
+    .map((item) => (state.askForDates ? item : { ...item, date: todayIso() }))
     .filter((item) => item.query);
   if (newItems.length === 0) {
     setStatus("list-status", "Paste at least one address first, one per line.", "error");
@@ -1300,7 +1318,7 @@ document.getElementById("setup-back").addEventListener("click", () => {
 
 document.getElementById("trip-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const date = document.getElementById("trip-date").value;
+  const date = state.askForDates ? document.getElementById("trip-date").value : todayIso();
   if (!selectedDestination) {
     setStatus("trip-status", "Type the destination, then pick it from the list that appears.", "error");
     return;
@@ -1336,6 +1354,19 @@ document.getElementById("download-csv").addEventListener("click", () => {
   const trips = tripsInView();
   const filename = month === "all" ? "mileage-all-trips.csv" : `mileage-${month}.csv`;
   downloadFile(filename, buildCsv(trips), "text/csv;charset=utf-8");
+});
+
+function applyDatesSetting() {
+  document.body.classList.toggle("no-dates", !state.askForDates);
+  document.getElementById("list-input").placeholder = state.askForDates
+    ? "10/13 Pike Place Market, Seattle\n10/14 2401 Utah Ave S, Seattle, WA\nThursday: 4000 E Madison St, Seattle"
+    : "Pike Place Market, Seattle\n2401 Utah Ave S, Seattle, WA\n4000 E Madison St, Seattle";
+}
+
+document.getElementById("dates-toggle").addEventListener("change", (event) => {
+  state.askForDates = event.target.checked;
+  saveState();
+  applyDatesSetting();
 });
 
 document.getElementById("rate-input").addEventListener("change", (event) => {
@@ -1376,6 +1407,7 @@ document.getElementById("trip-date").value = todayIso();
 document.getElementById("list-default-date").value = todayIso();
 try { showAddMode(localStorage.getItem(STORAGE_KEY + "-mode") || "list"); } catch { showAddMode("list"); }
 showDevReset();
+applyDatesSetting();
 renderAll();
 </script>
 </body>
