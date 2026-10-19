@@ -280,8 +280,13 @@
   details summary { cursor: pointer; font-weight: 600; }
   details .fields { margin-top: 16px; }
   .divider { border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
-  .credit { color: var(--muted); font-size: 12px; text-align: center; }
-  .credit a { color: inherit; }
+  .privacy {
+    display: grid; gap: 6px; justify-items: center; text-align: center;
+    color: var(--muted); font-size: 13px; max-width: 34em; margin: 0 auto;
+  }
+  .privacy p { margin: 0; }
+  .privacy strong { color: var(--ink); }
+  .privacy a { color: inherit; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -469,7 +474,11 @@
 
   <button type="button" class="dev-reset" id="dev-reset" hidden>Reset app (testing)</button>
 
-  <p class="credit">Distances are driving routes from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> data (OSRM routing, Photon search).</p>
+  <footer class="privacy">
+    <p><strong>🔒 Your trips stay on this device.</strong> Everything you enter is saved only in this browser. Nothing is stored on a server, and nothing is tracked.</p>
+    <p>To find places and measure drives, the addresses you type are looked up with free <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> services (Photon search, OSRM routing). They see the address, not your name or your trips.</p>
+    <p>The code for this app is public: <a href="https://github.com/ptrostli/mileage-log" target="_blank" rel="noopener">github.com/ptrostli/mileage-log</a></p>
+  </footer>
 </main>
 
 <script>
