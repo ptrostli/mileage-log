@@ -102,7 +102,6 @@
   .steps strong { font-size: 15px; }
   .steps span { font-size: 14px; color: var(--muted); }
   @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } .welcome { padding: 20px; } .welcome h2 { font-size: 26px; } }
-  button.big { font-size: 18px; padding: 14px 28px; border-radius: 12px; }
   .welcome-actions { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
   button.flair {
     position: relative;
@@ -324,7 +323,6 @@
       <li><strong>Download the sheet</strong><span>Every trip with its miles, totaled.</span></li>
     </ol>
     <div class="welcome-actions">
-      <button class="primary big" type="button" id="get-started">Get started</button>
       <button class="flair" type="button" id="name-guess">Your name is probably Amanda<span class="sticker">press this</span></button>
     </div>
   </section>
@@ -918,8 +916,7 @@ function renderRecentPlaces() {
 }
 
 function renderGreeting() {
-  document.getElementById("setup-title").textContent = state.name && !state.office ? `Great, ${state.name}! Now, where's your office?` : "Where's your office?";
-  document.getElementById("tagline").textContent = state.name ? `Time to log those miles, ${state.name} 🚗` : "Time to log those miles 🚗";
+  document.getElementById("setup-title").textContent = state.office ? "Where's your office?" : "Great! Now, where's your office?";
   const guess = document.getElementById("name-guess");
   if (!state.name) return;
   guess.classList.add("revealed");
@@ -1325,8 +1322,6 @@ document.getElementById("dev-reset").addEventListener("click", (event) => {
   } catch {}
   location.reload();
 });
-
-document.getElementById("get-started").addEventListener("click", startSetup);
 
 document.getElementById("setup-back").addEventListener("click", () => {
   setStatus("office-status", "");
